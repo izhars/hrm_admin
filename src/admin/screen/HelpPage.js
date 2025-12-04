@@ -1,3 +1,4 @@
+// src/pages/HelpPage.js
 import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AdminContext } from "../context/AdminContext";
@@ -5,9 +6,6 @@ import HelpApi from "../api/HelpApi";
 import Sidebar from "../component/Sidebar";
 import Navbar from "../component/Navbar";
 import { useTheme } from "../context/ThemeContext";
-
-// Predefined list of emoji icons to choose from
-const predefinedIcons = ["❓", "💡", "📄", "🔧", "📞", "⚙️", "🛠️", "📝"];
 
 const HelpPage = () => {
   const navigate = useNavigate();
@@ -20,11 +18,15 @@ const HelpPage = () => {
 
   // Data & Form State
   const [topics, setTopics] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ title: "", icon: predefinedIcons[0], description: "" });
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ title: "", icon: "", description: "" });
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
 
+  // Combined loading state - prevents UI from showing until everything is ready
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+  // Theme Colors
   const themeColors = {
     background: isDarkMode ? "#0f172a" : "#f8fafc",
     cardBg: isDarkMode ? "#1e293b" : "#ffffff",
@@ -39,7 +41,9 @@ const HelpPage = () => {
     success: "#10b981",
     warning: "#f59e0b",
     error: "#ef4444",
-    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    gradient: isDarkMode
+      ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+      : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
   };
 
   const handleMenuToggle = () => setSidebarCollapsed((prev) => !prev);
@@ -59,15 +63,23 @@ const HelpPage = () => {
   };
 
   useEffect(() => {
+    // Initial data fetching
     fetchTopics();
   }, []);
 
+  // Check when all initial loading is complete
+  useEffect(() => {
+    if (!adminLoading && !loading) {
+      // Small delay for smooth transition
+      const timer = setTimeout(() => {
+        setIsInitialLoading(false);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [adminLoading, loading]);
+
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleIconChange = (e) => {
-    setForm({ ...form, icon: e.target.value });
   };
 
   const handleSubmit = async (e) => {
@@ -86,7 +98,7 @@ const HelpPage = () => {
   };
 
   const resetForm = () => {
-    setForm({ title: "", icon: predefinedIcons[0], description: "" });
+    setForm({ title: "", icon: "", description: "" });
     setEditingId(null);
     setShowForm(false);
   };
@@ -94,7 +106,7 @@ const HelpPage = () => {
   const handleEdit = (topic) => {
     setForm({
       title: topic.title,
-      icon: topic.icon || predefinedIcons[0],
+      icon: topic.icon || "",
       description: topic.description || "",
     });
     setEditingId(topic._id);
@@ -111,7 +123,8 @@ const HelpPage = () => {
     }
   };
 
-  if (adminLoading || loading) {
+  // Show full loading screen until everything is ready
+  if (isInitialLoading) {
     return (
       <div
         style={{
@@ -149,8 +162,14 @@ const HelpPage = () => {
         backgroundColor: themeColors.background,
       }}
     >
-      <Sidebar isCollapsed={sidebarCollapsed} onToggle={handleMenuToggle} isDarkMode={isDarkMode} />
+      {/* Sidebar */}
+      <Sidebar
+        isCollapsed={sidebarCollapsed}
+        onToggle={handleMenuToggle}
+        isDarkMode={isDarkMode}
+      />
 
+      {/* Main Content Area */}
       <div
         style={{
           flex: 1,
@@ -161,8 +180,15 @@ const HelpPage = () => {
           transition: "margin 0.3s ease",
         }}
       >
-        <Navbar onMenuClick={handleMenuToggle} isCollapsed={sidebarCollapsed} isDarkMode={isDarkMode} admin={admin} />
+        {/* Navbar */}
+        <Navbar
+          onMenuClick={handleMenuToggle}
+          isCollapsed={sidebarCollapsed}
+          isDarkMode={isDarkMode}
+          admin={admin}
+        />
 
+        {/* Page Content */}
         <main
           style={{
             flex: 1,
@@ -174,6 +200,7 @@ const HelpPage = () => {
             } 100%)`,
           }}
         >
+          {/* Header */}
           <div style={{ marginBottom: "32px" }}>
             <button
               onClick={() => navigate(-1)}
@@ -190,10 +217,7 @@ const HelpPage = () => {
                 alignItems: "center",
                 gap: "8px",
                 marginBottom: "16px",
-                transition: "background-color 0.3s ease",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#3a33cc")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = themeColors.accent)}
             >
               ← Back
             </button>
@@ -204,14 +228,21 @@ const HelpPage = () => {
                 borderRadius: "16px",
                 padding: "28px",
                 color: "white",
-                boxShadow: isDarkMode ? "0 20px 25px -5px rgba(0, 0, 0, 0.3)" : "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+                boxShadow: isDarkMode
+                  ? "0 20px 25px -5px rgba(0, 0, 0, 0.3)"
+                  : "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
               }}
             >
-              <h1 style={{ fontSize: "32px", fontWeight: "700", margin: "0 0 8px 0" }}>Help & FAQs Management</h1>
-              <p style={{ fontSize: "16px", margin: 0, opacity: 0.9 }}>Manage help topics and frequently asked questions</p>
+              <h1 style={{ fontSize: "32px", fontWeight: "700", margin: "0 0 8px 0" }}>
+                Help & FAQs Management
+              </h1>
+              <p style={{ fontSize: "16px", margin: 0, opacity: 0.9 }}>
+                Manage help topics and frequently asked questions
+              </p>
             </div>
           </div>
 
+          {/* Add/Edit Form */}
           {showForm && (
             <div
               style={{
@@ -219,7 +250,9 @@ const HelpPage = () => {
                 borderRadius: "16px",
                 padding: "24px",
                 marginBottom: "32px",
-                boxShadow: isDarkMode ? "0 4px 6px rgba(0, 0, 0, 0.2)" : "0 4px 6px rgba(0, 0, 0, 0.1)",
+                boxShadow: isDarkMode
+                  ? "0 4px 6px rgba(0, 0, 0, 0.2)"
+                  : "0 4px 6px rgba(0, 0, 0, 0.1)",
                 border: `1px solid ${themeColors.borderLight}`,
                 maxWidth: "600px",
               }}
@@ -244,31 +277,21 @@ const HelpPage = () => {
                     color: themeColors.textPrimary,
                   }}
                 />
-
-                {/* Icon selector dropdown */}
-                <select
+                <input
+                  type="text"
                   name="icon"
+                  placeholder="Icon (emoji)"
                   value={form.icon}
-                  onChange={handleIconChange}
+                  onChange={handleChange}
                   style={{
                     padding: "12px",
-                    fontSize: "20px",
+                    fontSize: "16px",
                     borderRadius: "8px",
                     border: `1px solid ${themeColors.border}`,
                     background: themeColors.cardBgSecondary,
                     color: themeColors.textPrimary,
-                    cursor: "pointer",
-                    appearance: "none",
                   }}
-                  aria-label="Select icon"
-                >
-                  {predefinedIcons.map((icon) => (
-                    <option key={icon} value={icon}>
-                      {icon}
-                    </option>
-                  ))}
-                </select>
-
+                />
                 <textarea
                   name="description"
                   placeholder="Description"
@@ -285,7 +308,6 @@ const HelpPage = () => {
                     resize: "vertical",
                   }}
                 />
-
                 <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
                   <button
                     type="button"
@@ -297,10 +319,7 @@ const HelpPage = () => {
                       border: `1px solid ${themeColors.border}`,
                       borderRadius: "8px",
                       cursor: "pointer",
-                      transition: "background-color 0.3s ease",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = themeColors.borderLight)}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = themeColors.cardBgSecondary)}
                   >
                     Cancel
                   </button>
@@ -314,10 +333,7 @@ const HelpPage = () => {
                       borderRadius: "8px",
                       cursor: "pointer",
                       fontWeight: "600",
-                      transition: "background-color 0.3s ease",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#2563eb")}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = themeColors.primary)}
                   >
                     {editingId ? "Update" : "Add"} Topic
                   </button>
@@ -326,6 +342,7 @@ const HelpPage = () => {
             </div>
           )}
 
+          {/* Add Button & Topics Grid */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
             <h2 style={{ color: themeColors.textPrimary, margin: 0 }}>All Topics ({topics.length})</h2>
             <button
@@ -342,15 +359,13 @@ const HelpPage = () => {
                 cursor: "pointer",
                 fontWeight: "600",
                 fontSize: "14px",
-                transition: "background-color 0.3s ease",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#4338ca")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = themeColors.accent)}
             >
               + Add Topic
             </button>
           </div>
 
+          {/* Topics Grid */}
           {topics.length === 0 ? (
             <div
               style={{
@@ -380,7 +395,9 @@ const HelpPage = () => {
                     background: themeColors.cardBg,
                     borderRadius: "16px",
                     padding: "24px",
-                    boxShadow: isDarkMode ? "0 4px 6px rgba(0, 0, 0, 0.2)" : "0 4px 6px rgba(0, 0, 0, 0.1)",
+                    boxShadow: isDarkMode
+                      ? "0 4px 6px rgba(0, 0, 0, 0.2)"
+                      : "0 4px 6px rgba(0, 0, 0, 0.1)",
                     border: `1px solid ${themeColors.borderLight}`,
                     display: "flex",
                     flexDirection: "column",
@@ -406,10 +423,7 @@ const HelpPage = () => {
                         border: "none",
                         borderRadius: "8px",
                         cursor: "pointer",
-                        transition: "background-color 0.3s ease",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#b45309")}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = themeColors.warning)}
                     >
                       Edit
                     </button>
@@ -423,10 +437,7 @@ const HelpPage = () => {
                         border: "none",
                         borderRadius: "8px",
                         cursor: "pointer",
-                        transition: "background-color 0.3s ease",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#dc2626")}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = themeColors.error)}
                     >
                       Delete
                     </button>
@@ -438,6 +449,7 @@ const HelpPage = () => {
         </main>
       </div>
 
+      {/* Spinner Animation */}
       <style jsx>{`
         @keyframes spin {
           to {

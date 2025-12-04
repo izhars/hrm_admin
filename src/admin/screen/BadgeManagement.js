@@ -28,14 +28,10 @@ const BadgeManagement = () => {
         setLoading(true);
         setError("");
 
-        // Log the start of the fetch operation
-        console.log("Fetching badges from API...");
-
         try {
             const res = await BadgeApi.getBadges();
             if (res.success) {
-                // Log the successful fetching and the number of items
-                console.log(`Successfully fetched ${res.data.length} badges.`, res.data);
+                
                 setBadges(res.data);
             } else {
                 // Log the API-specific error message
@@ -47,8 +43,6 @@ const BadgeManagement = () => {
             console.error("Catch Error: Something went wrong during the fetch operation.", err);
             setError("Something went wrong while fetching badges");
         } finally {
-            // Log that the process has completed
-            console.log("Finished fetching badges.");
             setLoading(false);
         }
     };

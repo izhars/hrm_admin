@@ -99,7 +99,6 @@ const AwardScreen = () => {
     };
 
     const fetchAwards = async () => {
-        console.log("📦 Fetching awards...");
         setLoading(true);
         setError("");
 
@@ -107,13 +106,9 @@ const AwardScreen = () => {
             const res = isHRorAbove
                 ? await AwardApi.getAwards()
                 : await AwardApi.getMyAwards();
-
-            console.log("✅ API Response:", res);
-
             const awardData = res.data?.data || [];
 
             if (res.success && Array.isArray(awardData)) {
-                console.log(`📋 Received ${awardData.length} awards`);
                 setAwards(awardData);
             } else {
                 console.warn("⚠️ Invalid data structure:", res);
@@ -124,7 +119,6 @@ const AwardScreen = () => {
             console.error("❌ Error fetching awards:", err);
             setError("Something went wrong");
         } finally {
-            console.log("✅ Fetch complete");
             setLoading(false);
         }
     };
@@ -145,8 +139,6 @@ const AwardScreen = () => {
                 awardedTo: formData.awardedTo,
                 badgeUrl: formData.selectedBadge?.imageUrl || "" // Use selected badge URL
             };
-
-            console.log("📤 Sending award data:", payload);
 
             const res = await AwardApi.createAward(payload);
             if (res.success) {

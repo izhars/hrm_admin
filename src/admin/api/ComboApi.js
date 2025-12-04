@@ -26,13 +26,12 @@ class ComboApi extends ApiBase {
 
   // Get monthly summary
   async getMonthlyComboOffSummary(month, year) {
-    console.log("Fetching monthly combo off summary for:", { month, year });
-
+    
     try {
       const response = await this.fetchWithErrorHandling(
         `${this.endpoint}/summary/monthly?month=${month}&year=${year}`
       );
-      console.log("Monthly summary response:", response);
+      
       return response;
     } catch (error) {
       console.error("Error fetching monthly combo off summary:", error);

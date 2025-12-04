@@ -1,14 +1,26 @@
 // src/pages/EmployeeAttendanceDetail.js
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AdminContext } from "../context/AdminContext";
 import AttendanceApi from "../api/AttendanceApi";
 import Sidebar from "../component/Sidebar";
 import Navbar from "../component/Navbar";
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
+import {
+    format,
+    parseISO,
+    startOfMonth,
+    endOfMonth,
+    eachDayOfInterval,
+    isSameDay,
+    addMonths,
+    subMonths,
+    getMonth,
+    getYear,
+    isToday
+} from "date-fns";
 import LocationCell from "../component/LocationCell";
 import { Line } from 'react-chartjs-2';
-import { useTheme } from '../context/ThemeContext'; // Import theme context
+import { useTheme } from '../context/ThemeContext';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -32,14 +44,12 @@ ChartJS.register(
     Filler
 );
 
-
 const EmployeeAttendanceDetail = () => {
     const { employeeId } = useParams();
     const navigate = useNavigate();
 
     // UI State
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    // Get theme from context instead of local state
     const { isDarkMode } = useTheme();
     const { admin, loading: adminLoading } = useContext(AdminContext) || {};
 
@@ -56,25 +66,30 @@ const EmployeeAttendanceDetail = () => {
         totalWorkHours: 0
     });
 
+    // Calendar State
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [selectedDay, setSelectedDay] = useState(null);
+
     const sidebarWidth = sidebarCollapsed ? "80px" : "280px";
 
     const themeColors = {
         background: isDarkMode ? "#0f172a" : "#f8fafc",
         cardBg: isDarkMode ? "#1e293b" : "#ffffff",
-        cardBgSecondary: isDarkMode ? "#2d3748" : "#f7fafc",
-        textPrimary: isDarkMode ? "#e2e8f0" : "#1a202c",
-        textSecondary: isDarkMode ? "#94a3b8" : "#718096",
-        textMuted: isDarkMode ? "#64748b" : "#a0aec0",
-        border: isDarkMode ? "#374151" : "#e2e8f0",
-        borderLight: isDarkMode ? "#4b5563" : "#f1f5f9",
+        cardBgSecondary: isDarkMode ? "#2d3748" : "#f8fafc",
+        textPrimary: isDarkMode ? "#f1f5f9" : "#1e293b",
+        textSecondary: isDarkMode ? "#cbd5e1" : "#64748b",
+        textMuted: isDarkMode ? "#94a3b8" : "#94a3b8",
+        border: isDarkMode ? "#334155" : "#e2e8f0",
+        borderLight: isDarkMode ? "#475569" : "#f1f5f9",
         success: "#10b981",
         warning: "#f59e0b",
         error: "#ef4444",
         primary: "#3b82f6",
         accent: isDarkMode ? "#6366f1" : "#4f46e5",
         gradient: isDarkMode
-            ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-            : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            ? "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)"
+            : "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+        overlay: isDarkMode ? "rgba(15, 23, 42, 0.8)" : "rgba(248, 250, 252, 0.8)",
     };
 
     const handleMenuToggle = () => setSidebarCollapsed((p) => !p);
@@ -139,9 +154,42 @@ const EmployeeAttendanceDetail = () => {
         });
     };
 
+    // Memoized attendance data by date
+    const attendanceByDate = useMemo(() => {
+        return attendanceData.reduce((map, record) => {
+            const dateKey = format(new Date(record.date), 'yyyy-MM-dd');
+            map[dateKey] = record;
+            return map;
+        }, {});
+    }, [attendanceData]);
+
+    // Calendar days for current month
+    const calendarDays = useMemo(() => {
+        return eachDayOfInterval({
+            start: startOfMonth(currentMonth),
+            end: endOfMonth(currentMonth),
+        });
+    }, [currentMonth]);
+
     useEffect(() => {
         fetchEmployeeAttendance();
     }, [employeeId]);
+
+    // Calendar Navigation
+    const goToPreviousMonth = () => {
+        setCurrentMonth(subMonths(currentMonth, 1));
+        setSelectedDay(null);
+    };
+
+    const goToNextMonth = () => {
+        setCurrentMonth(addMonths(currentMonth, 1));
+        setSelectedDay(null);
+    };
+
+    const goToToday = () => {
+        setCurrentMonth(new Date());
+        setSelectedDay(null);
+    };
 
     // Helper functions
     const formatTime = (timeString) => {
@@ -172,7 +220,51 @@ const EmployeeAttendanceDetail = () => {
         }
     };
 
-    // Prepare chart data
+    const statusConfig = {
+        present: {
+            bg: isDarkMode ? "linear-gradient(135deg, #065f46, #047857)" : "linear-gradient(135deg, #dcfce7, #bbf7d0)",
+            color: isDarkMode ? "#10b981" : "#059669",
+            text: "Present",
+            icon: "✅",
+        },
+        absent: {
+            bg: isDarkMode ? "linear-gradient(135deg, #7f1d1d, #991b1b)" : "linear-gradient(135deg, #fecaca, #fca5a5)",
+            color: isDarkMode ? "#ef4444" : "#dc2626",
+            text: "Absent",
+            icon: "❌",
+        },
+        "on-leave": {
+            bg: isDarkMode ? "linear-gradient(135deg, #92400e, #b45309)" : "linear-gradient(135deg, #fed7aa, #fdba74)",
+            color: isDarkMode ? "#f59e0b" : "#d97706",
+            text: "On Leave",
+            icon: "🏖️",
+        },
+        "half-day": {
+            bg: isDarkMode ? "linear-gradient(135deg, #78350f, #92400e)" : "linear-gradient(135deg, #fde68a, #fcd34d)",
+            color: isDarkMode ? "#ca8a04" : "#a16207",
+            text: "Half Day",
+            icon: "🕒",
+        },
+        "public-holiday": {
+            bg: isDarkMode ? "linear-gradient(135deg, #1e3a8a, #3730a3)" : "linear-gradient(135deg, #bfdbfe, #93c5fd)",
+            color: isDarkMode ? "#60a5fa" : "#2563eb",
+            text: "Public Holiday",
+            icon: "🎉",
+        },
+        "combo-off": {
+            bg: isDarkMode ? "linear-gradient(135deg, #4b5563, #6b7280)" : "linear-gradient(135deg, #d1d5db, #9ca3af)",
+            color: isDarkMode ? "#9ca3af" : "#6b7280",
+            text: "Combo Off",
+            icon: "🛑",
+        },
+        "non-working-day": {
+            bg: isDarkMode ? "linear-gradient(135deg, #374151, #4b5563)" : "linear-gradient(135deg, #f3f4f6, #e5e7eb)",
+            color: isDarkMode ? "#9ca3af" : "#6b7280",
+            text: "Non-working Day",
+            icon: "🚫",
+        },
+    };
+
     // Prepare chart data
     const prepareChartData = () => {
         const last30Days = attendanceData.slice(0, 30).reverse();
@@ -181,25 +273,52 @@ const EmployeeAttendanceDetail = () => {
             labels: last30Days.map(record => format(new Date(record.date), 'MM/dd')),
             datasets: [
                 {
-                    label: 'Work Minutes', // Changed from 'Work Hours'
-                    data: last30Days.map(record => (record.workHours || 0) * 60), // Convert hours to minutes
+                    label: 'Work Hours',
+                    data: last30Days.map(record => record.workHours || 0),
                     borderColor: themeColors.primary,
-                    backgroundColor: `${themeColors.primary}20`,
+                    backgroundColor: `${themeColors.primary}15`,
                     tension: 0.4,
-                    fill: true
+                    fill: true,
+                    pointBackgroundColor: themeColors.primary,
+                    pointBorderColor: themeColors.cardBg,
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
                 },
                 {
                     label: 'Late Minutes',
-                    data: last30Days.map(record => record.isLate ? (record.lateBy || 0) : 0),
-                    borderColor: themeColors.error,
-                    backgroundColor: `${themeColors.error}20`,
+                    data: last30Days.map(record => record.isLate ? (record.lateBy || 0) / 60 : 0),
+                    borderColor: themeColors.warning,
+                    backgroundColor: `${themeColors.warning}15`,
                     tension: 0.4,
-                    fill: false
+                    fill: false,
+                    borderDash: [5, 5],
+                    pointBackgroundColor: themeColors.warning,
+                    pointBorderColor: themeColors.cardBg,
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
                 }
             ]
         };
     };
 
+    // Calendar day click handler
+    const onDayClick = (day) => {
+        const dayKey = format(day, 'yyyy-MM-dd');
+        if (attendanceByDate[dayKey]) {
+            setSelectedDay(attendanceByDate[dayKey]);
+        } else {
+            setSelectedDay({
+                date: dayKey,
+                status: 'non-working-day',
+                noRecord: true
+            });
+        }
+    };
+
+    // Close selected day details
+    const closeSelectedDay = () => {
+        setSelectedDay(null);
+    };
 
     if (adminLoading || loading) {
         return (
@@ -208,20 +327,20 @@ const EmployeeAttendanceDetail = () => {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: themeColors.background,
+                background: themeColors.background,
                 color: themeColors.textPrimary,
             }}>
                 <div style={{ textAlign: "center" }}>
                     <div style={{
-                        width: "40px",
-                        height: "40px",
+                        width: "48px",
+                        height: "48px",
                         border: `3px solid ${themeColors.border}`,
                         borderTop: `3px solid ${themeColors.primary}`,
                         borderRadius: "50%",
                         animation: "spin 1s linear infinite",
-                        margin: "0 auto 16px",
+                        margin: "0 auto 20px",
                     }} />
-                    <p>Loading employee details...</p>
+                    <p style={{ fontSize: "16px", color: themeColors.textSecondary }}>Loading employee details...</p>
                 </div>
             </div>
         );
@@ -230,13 +349,13 @@ const EmployeeAttendanceDetail = () => {
     return (
         <div style={{
             display: "flex",
-            height: "100vh",
-            backgroundColor: isDarkMode ? '#0f172a' : '#f8f9fa'
+            minHeight: "100vh",
+            background: themeColors.background
         }}>
             <Sidebar
                 isCollapsed={sidebarCollapsed}
                 onToggle={handleMenuToggle}
-                isDarkMode={isDarkMode} // Pass from context
+                isDarkMode={isDarkMode}
             />
 
             <div style={{
@@ -244,40 +363,51 @@ const EmployeeAttendanceDetail = () => {
                 display: "flex",
                 flexDirection: "column",
                 marginLeft: sidebarWidth,
-                backgroundColor: isDarkMode ? '#0f172a' : '#f8f9fa'
+                transition: "margin-left 0.3s ease",
+                background: themeColors.background
             }}>
                 <Navbar
                     onMenuClick={handleMenuToggle}
                     isCollapsed={sidebarCollapsed}
-                    isDarkMode={isDarkMode} // Pass from context
-                    // Remove onThemeToggle prop since Navbar now uses context directly
+                    isDarkMode={isDarkMode}
                     admin={admin}
                 />
+
                 {/* Page Content */}
                 <main style={{
                     flex: 1,
                     overflow: "auto",
                     padding: "24px",
                     paddingTop: "88px",
-                    background: `linear-gradient(135deg, ${isDarkMode ? '#0f172a' : '#f8fafc'} 0%, ${isDarkMode ? '#1e293b' : '#ffffff'} 100%)`,
+                    background: themeColors.background,
                 }}>
                     {/* Back Button & Header */}
-                    <div style={{ marginBottom: "24px" }}>
+                    <div style={{ marginBottom: "32px" }}>
                         <button
                             onClick={() => navigate(-1)}
                             style={{
-                                background: themeColors.accent,
-                                color: "white",
-                                padding: "10px 20px",
+                                background: "transparent",
+                                color: themeColors.primary,
+                                padding: "10px 16px",
                                 borderRadius: "8px",
-                                border: "none",
+                                border: `1px solid ${themeColors.primary}30`,
                                 cursor: "pointer",
                                 fontSize: "14px",
                                 fontWeight: "500",
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "8px",
-                                marginBottom: "16px",
+                                marginBottom: "20px",
+                                transition: "all 0.2s ease",
+                                backdropFilter: "blur(10px)",
+                            }}
+                            onMouseOver={(e) => {
+                                e.target.style.background = `${themeColors.primary}15`;
+                                e.target.style.transform = "translateX(-4px)";
+                            }}
+                            onMouseOut={(e) => {
+                                e.target.style.background = "transparent";
+                                e.target.style.transform = "translateX(0)";
                             }}
                         >
                             ← Back to Attendance
@@ -286,23 +416,51 @@ const EmployeeAttendanceDetail = () => {
                         {employee && (
                             <div style={{
                                 background: themeColors.gradient,
-                                borderRadius: "16px",
-                                padding: "24px",
-                                color: "white",
+                                borderRadius: "20px",
+                                padding: "32px",
+                                color: themeColors.textPrimary,
                                 boxShadow: isDarkMode
-                                    ? "0 20px 25px -5px rgba(0, 0, 0, 0.3)"
-                                    : "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+                                    ? "0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)"
+                                    : "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                                border: `1px solid ${themeColors.border}`,
+                                position: "relative",
+                                overflow: "hidden"
                             }}>
+                                <div style={{
+                                    position: "absolute",
+                                    top: 0,
+                                    right: 0,
+                                    width: "200px",
+                                    height: "200px",
+                                    background: "radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%)",
+                                    borderRadius: "50%",
+                                    transform: "translate(30%, -30%)"
+                                }} />
                                 <h1 style={{
-                                    fontSize: "28px",
-                                    fontWeight: "700",
+                                    fontSize: "32px",
+                                    fontWeight: "800",
                                     margin: "0 0 8px 0",
+                                    background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+                                    WebkitBackgroundClip: "text",
+                                    WebkitTextFillColor: "transparent",
+                                    backgroundClip: "text",
                                 }}>
                                     📊 {employee.fullName || `${employee.firstName} ${employee.lastName}`}
                                 </h1>
-                                <p style={{ fontSize: "16px", margin: 0, opacity: 0.9 }}>
-                                    Employee ID: {employee.employeeId} | Email: {employee.email}
-                                </p>
+                                <div style={{
+                                    display: "flex",
+                                    gap: "16px",
+                                    flexWrap: "wrap",
+                                    fontSize: "15px",
+                                    opacity: 0.9
+                                }}>
+                                    <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                        🆔 Employee ID: {employee.employeeId}
+                                    </span>
+                                    <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                        📧 {employee.email}
+                                    </span>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -310,9 +468,9 @@ const EmployeeAttendanceDetail = () => {
                     {/* Stats Cards */}
                     <div style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                        gap: "20px",
-                        marginBottom: "32px",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                        gap: "24px",
+                        marginBottom: "40px",
                     }}>
                         {[
                             {
@@ -320,285 +478,679 @@ const EmployeeAttendanceDetail = () => {
                                 value: monthlyStats.totalDays,
                                 icon: "📋",
                                 color: themeColors.primary,
+                                trend: "+12%",
                             },
                             {
                                 label: "Present Days",
                                 value: monthlyStats.presentDays,
                                 icon: "✅",
                                 color: themeColors.success,
+                                trend: "+5%",
                             },
                             {
                                 label: "Late Days",
                                 value: monthlyStats.lateDays,
                                 icon: "⏰",
                                 color: themeColors.warning,
+                                trend: "-2%",
                             },
                             {
                                 label: "Total Work Hours",
                                 value: formatWorkHours(monthlyStats.totalWorkHours),
                                 icon: "⏱️",
                                 color: themeColors.accent,
+                                trend: "+8%",
                             },
                         ].map((stat, idx) => (
                             <div key={idx} style={{
                                 background: themeColors.cardBg,
-                                borderRadius: "12px",
-                                padding: "20px",
+                                borderRadius: "16px",
+                                padding: "24px",
                                 boxShadow: isDarkMode
-                                    ? "0 4px 6px rgba(0, 0, 0, 0.2)"
-                                    : "0 4px 6px rgba(0, 0, 0, 0.1)",
+                                    ? "0 4px 6px rgba(0, 0, 0, 0.1)"
+                                    : "0 2px 8px rgba(0, 0, 0, 0.06)",
                                 border: `1px solid ${themeColors.borderLight}`,
-                            }}>
-                                <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
-                                    <span style={{ fontSize: "20px", marginRight: "8px" }}>{stat.icon}</span>
+                                transition: "all 0.3s ease",
+                                position: "relative",
+                                overflow: "hidden"
+                            }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.transform = "translateY(-4px)";
+                                    e.currentTarget.style.boxShadow = isDarkMode
+                                        ? "0 12px 25px rgba(0, 0, 0, 0.2)"
+                                        : "0 12px 25px rgba(0, 0, 0, 0.1)";
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.transform = "translateY(0)";
+                                    e.currentTarget.style.boxShadow = isDarkMode
+                                        ? "0 4px 6px rgba(0, 0, 0, 0.1)"
+                                        : "0 2px 8px rgba(0, 0, 0, 0.06)";
+                                }}
+                            >
+                                <div style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    marginBottom: "12px"
+                                }}>
+                                    <div style={{
+                                        width: "48px",
+                                        height: "48px",
+                                        borderRadius: "12px",
+                                        background: `${stat.color}15`,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        fontSize: "20px"
+                                    }}>
+                                        {stat.icon}
+                                    </div>
                                     <span style={{
                                         fontSize: "12px",
-                                        fontWeight: "500",
-                                        color: themeColors.textSecondary,
-                                        textTransform: "uppercase",
+                                        fontWeight: "600",
+                                        color: stat.color,
+                                        background: `${stat.color}15`,
+                                        padding: "4px 8px",
+                                        borderRadius: "12px"
                                     }}>
-                                        {stat.label}
+                                        {stat.trend}
                                     </span>
                                 </div>
                                 <div style={{
-                                    fontSize: "24px",
-                                    fontWeight: "700",
+                                    fontSize: "28px",
+                                    fontWeight: "800",
                                     color: stat.color,
+                                    marginBottom: "4px"
                                 }}>
                                     {stat.value}
+                                </div>
+                                <div style={{
+                                    fontSize: "13px",
+                                    fontWeight: "600",
+                                    color: themeColors.textSecondary,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em"
+                                }}>
+                                    {stat.label}
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    {/* Chart Section */}
-                    {/* Chart Section */}
-                    {attendanceData.length > 0 && (
-                        <div style={{
-                            background: themeColors.cardBg,
-                            borderRadius: "16px",
-                            padding: "24px",
-                            marginBottom: "24px",
-                            boxShadow: isDarkMode
-                                ? "0 4px 6px rgba(0, 0, 0, 0.2)"
-                                : "0 4px 6px rgba(0, 0, 0, 0.1)",
-                            border: `1px solid ${themeColors.borderLight}`,
-                        }}>
-                            <h3 style={{
-                                color: themeColors.textPrimary,
-                                marginBottom: "20px",
-                                fontSize: "18px",
-                                fontWeight: "600",
-                            }}>
-                                📈 Attendance Trend (Last 30 Days)
-                            </h3>
-                            {/* Add this container with fixed height */}
-                            <div style={{
-                                width: "100%",
-                                height: "400px",  // Fixed height
-                                position: "relative"
-                            }}>
-                                <Line
-                                    data={prepareChartData()}
-                                    options={{
-                                        responsive: true,
-                                        maintainAspectRatio: false,  // This is crucial
-                                        plugins: {
-                                            legend: {
-                                                position: 'top',
-                                                labels: {
-                                                    color: themeColors.textPrimary
+                    {/* Main Content Grid */}
+                    <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 400px",
+                        gap: "24px",
+                        alignItems: "start"
+                    }}>
+                        {/* Left Column - Chart & Calendar */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                            {/* Chart Section */}
+                            {attendanceData.length > 0 && (
+                                <div style={{
+                                    background: themeColors.cardBg,
+                                    borderRadius: "20px",
+                                    padding: "24px",
+                                    boxShadow: isDarkMode
+                                        ? "0 4px 6px rgba(0, 0, 0, 0.1)"
+                                        : "0 2px 8px rgba(0, 0, 0, 0.06)",
+                                    border: `1px solid ${themeColors.borderLight}`,
+                                }}>
+                                    <div style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "20px"
+                                    }}>
+                                        <h3 style={{
+                                            color: themeColors.textPrimary,
+                                            margin: 0,
+                                            fontSize: "18px",
+                                            fontWeight: "700",
+                                        }}>
+                                            📈 Attendance Trend (Last 30 Days)
+                                        </h3>
+                                        <div style={{
+                                            display: "flex",
+                                            gap: "8px",
+                                            fontSize: "12px",
+                                            color: themeColors.textSecondary
+                                        }}>
+                                            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                                <div style={{ width: "8px", height: "8px", background: themeColors.primary, borderRadius: "50%" }} />
+                                                Work Hours
+                                            </span>
+                                            <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                                <div style={{ width: "8px", height: "8px", background: themeColors.warning, borderRadius: "50%" }} />
+                                                Late Hours
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div style={{
+                                        width: "100%",
+                                        height: "300px",
+                                        position: "relative"
+                                    }}>
+                                        <Line
+                                            data={prepareChartData()}
+                                            options={{
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                plugins: {
+                                                    legend: {
+                                                        display: false
+                                                    },
+                                                    tooltip: {
+                                                        backgroundColor: themeColors.cardBg,
+                                                        titleColor: themeColors.textPrimary,
+                                                        bodyColor: themeColors.textPrimary,
+                                                        borderColor: themeColors.border,
+                                                        borderWidth: 1,
+                                                        padding: 12,
+                                                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                                                        callbacks: {
+                                                            label: function (context) {
+                                                                let label = context.dataset.label || '';
+                                                                if (label) {
+                                                                    label += ': ';
+                                                                }
+                                                                if (context.dataset.label === 'Work Hours') {
+                                                                    label += context.parsed.y.toFixed(1) + 'h';
+                                                                } else {
+                                                                    label += context.parsed.y.toFixed(0) + 'm';
+                                                                }
+                                                                return label;
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                scales: {
+                                                    y: {
+                                                        beginAtZero: true,
+                                                        ticks: {
+                                                            color: themeColors.textSecondary,
+                                                            callback: function (value) {
+                                                                return value + 'h';
+                                                            }
+                                                        },
+                                                        grid: {
+                                                            color: themeColors.borderLight,
+                                                            borderDash: [4, 4]
+                                                        }
+                                                    },
+                                                    x: {
+                                                        ticks: { color: themeColors.textSecondary },
+                                                        grid: {
+                                                            color: themeColors.borderLight,
+                                                            borderDash: [4, 4]
+                                                        }
+                                                    }
+                                                },
+                                                interaction: {
+                                                    intersect: false,
+                                                    mode: 'index'
                                                 }
-                                            },
-                                        },
-                                        scales: {
-                                            y: {
-                                                beginAtZero: true,
-                                                ticks: { color: themeColors.textSecondary },
-                                                grid: { color: themeColors.borderLight }
-                                            },
-                                            x: {
-                                                ticks: { color: themeColors.textSecondary },
-                                                grid: { color: themeColors.borderLight }
-                                            }
-                                        }
-                                    }}
-                                />
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Calendar Section */}
+                            <div style={{
+                                background: themeColors.cardBg,
+                                borderRadius: "20px",
+                                overflow: "hidden",
+                                boxShadow: isDarkMode
+                                    ? "0 4px 6px rgba(0, 0, 0, 0.1)"
+                                    : "0 2px 8px rgba(0, 0, 0, 0.06)",
+                                border: `1px solid ${themeColors.borderLight}`,
+                            }}>
+                                {/* Calendar Header */}
+                                <div style={{
+                                    padding: "24px",
+                                    borderBottom: `1px solid ${themeColors.borderLight}`,
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center"
+                                }}>
+                                    <h3 style={{
+                                        color: themeColors.textPrimary,
+                                        margin: 0,
+                                        fontSize: "18px",
+                                        fontWeight: "700",
+                                    }}>
+                                        📅 Attendance Calendar
+                                    </h3>
+                                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                                        <button
+                                            onClick={goToPreviousMonth}
+                                            style={{
+                                                padding: "10px 12px",
+                                                borderRadius: "10px",
+                                                border: `1px solid ${themeColors.border}`,
+                                                background: themeColors.cardBgSecondary,
+                                                color: themeColors.textPrimary,
+                                                cursor: "pointer",
+                                                fontSize: "16px",
+                                                fontWeight: "600",
+                                                transition: "all 0.2s ease"
+                                            }}
+                                            onMouseOver={(e) => e.target.style.background = themeColors.borderLight}
+                                            onMouseOut={(e) => e.target.style.background = themeColors.cardBgSecondary}
+                                        >
+                                            ‹
+                                        </button>
+                                        <span style={{
+                                            fontSize: "16px",
+                                            fontWeight: "700",
+                                            color: themeColors.textPrimary,
+                                            minWidth: "140px",
+                                            textAlign: "center"
+                                        }}>
+                                            {format(currentMonth, 'MMMM yyyy')}
+                                        </span>
+                                        <button
+                                            onClick={goToNextMonth}
+                                            style={{
+                                                padding: "10px 12px",
+                                                borderRadius: "10px",
+                                                border: `1px solid ${themeColors.border}`,
+                                                background: themeColors.cardBgSecondary,
+                                                color: themeColors.textPrimary,
+                                                cursor: "pointer",
+                                                fontSize: "16px",
+                                                fontWeight: "600",
+                                                transition: "all 0.2s ease"
+                                            }}
+                                            onMouseOver={(e) => e.target.style.background = themeColors.borderLight}
+                                            onMouseOut={(e) => e.target.style.background = themeColors.cardBgSecondary}
+                                        >
+                                            ›
+                                        </button>
+                                        <button
+                                            onClick={goToToday}
+                                            style={{
+                                                padding: "10px 16px",
+                                                borderRadius: "10px",
+                                                border: `1px solid ${themeColors.primary}`,
+                                                background: themeColors.primary,
+                                                color: "white",
+                                                cursor: "pointer",
+                                                fontSize: "14px",
+                                                fontWeight: "600",
+                                                transition: "all 0.2s ease",
+                                                marginLeft: "8px"
+                                            }}
+                                            onMouseOver={(e) => {
+                                                e.target.style.background = themeColors.accent;
+                                                e.target.style.borderColor = themeColors.accent;
+                                            }}
+                                            onMouseOut={(e) => {
+                                                e.target.style.background = themeColors.primary;
+                                                e.target.style.borderColor = themeColors.primary;
+                                            }}
+                                        >
+                                            Today
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Calendar Grid */}
+                                <div style={{ padding: "20px" }}>
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(7, 1fr)',
+                                        gap: '8px',
+                                        fontSize: '14px',
+                                    }}>
+                                        {/* Weekday Headers */}
+                                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(dow => (
+                                            <div key={dow} style={{
+                                                fontWeight: '700',
+                                                textAlign: 'center',
+                                                color: themeColors.textSecondary,
+                                                fontSize: '12px',
+                                                padding: '12px 0',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.05em'
+                                            }}>
+                                                {dow}
+                                            </div>
+                                        ))}
+
+                                        {/* Calendar Days */}
+                                        {calendarDays.map((day) => {
+                                            const dayKey = format(day, 'yyyy-MM-dd');
+                                            const record = attendanceByDate[dayKey];
+                                            const status = record?.status || 'non-working-day';
+                                            const isSelected = selectedDay && isSameDay(new Date(selectedDay.date || selectedDay.date), day);
+                                            const config = statusConfig[status];
+                                            const isCurrentMonth = getMonth(day) === getMonth(currentMonth);
+                                            const isTodayDate = isToday(day);
+
+                                            return (
+                                                <div
+                                                    key={dayKey}
+                                                    onClick={() => onDayClick(day)}
+                                                    style={{
+                                                        aspectRatio: '1',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        borderRadius: '12px',
+                                                        cursor: 'pointer',
+                                                        border: isSelected ? `3px solid ${themeColors.accent}` :
+                                                            isTodayDate ? `2px solid ${themeColors.primary}` : 'none',
+                                                        background: config.bg,
+                                                        color: config.color,
+                                                        opacity: isCurrentMonth ? 1 : 0.3,
+                                                        transition: 'all 0.2s ease',
+                                                        position: 'relative',
+                                                        fontWeight: '600',
+                                                        fontSize: '14px',
+                                                        userSelect: 'none',
+                                                        boxShadow: isSelected ? `0 4px 12px ${themeColors.accent}40` : 'none',
+                                                        transform: isSelected ? 'scale(1.05)' : 'scale(1)'
+                                                    }}
+                                                    title={record ? `${config?.text || status} - ${formatTime(record.checkIn?.time)}` : 'No record'}
+                                                    onMouseOver={(e) => {
+                                                        if (!isSelected) {
+                                                            e.currentTarget.style.transform = 'scale(1.05)';
+                                                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                                                        }
+                                                    }}
+                                                    onMouseOut={(e) => {
+                                                        if (!isSelected) {
+                                                            e.currentTarget.style.transform = 'scale(1)';
+                                                            e.currentTarget.style.boxShadow = 'none';
+                                                        }
+                                                    }}
+                                                >
+                                                    <div style={{
+                                                        fontSize: '15px',
+                                                        lineHeight: 1,
+                                                        marginBottom: '4px'
+                                                    }}>
+                                                        {format(day, 'd')}
+                                                    </div>
+                                                    <div style={{ fontSize: '16px' }}>
+                                                        {config?.icon}
+                                                    </div>
+                                                    {record?.isLate && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '4px',
+                                                            right: '4px',
+                                                            width: '6px',
+                                                            height: '6px',
+                                                            backgroundColor: themeColors.warning,
+                                                            borderRadius: '50%',
+                                                        }} />
+                                                    )}
+                                                    {isTodayDate && !isSelected && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            bottom: '2px',
+                                                            width: '4px',
+                                                            height: '4px',
+                                                            backgroundColor: themeColors.primary,
+                                                            borderRadius: '50%',
+                                                        }} />
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    )}
 
-
-                    {/* Attendance Records Table */}
-                    <div style={{
-                        background: themeColors.cardBg,
-                        borderRadius: "16px",
-                        overflow: "hidden",
-                        boxShadow: isDarkMode
-                            ? "0 4px 6px rgba(0, 0, 0, 0.2)"
-                            : "0 4px 6px rgba(0, 0, 0, 0.1)",
-                        border: `1px solid ${themeColors.borderLight}`,
-                    }}>
-                        <div style={{ padding: "20px", borderBottom: `1px solid ${themeColors.borderLight}` }}>
-                            <h3 style={{
-                                color: themeColors.textPrimary,
-                                margin: 0,
-                                fontSize: "18px",
-                                fontWeight: "600",
+                        {/* Right Column - Status Legend & Day Details */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "24px", position: "sticky", top: "100px" }}>
+                            {/* Status Legend */}
+                            <div style={{
+                                background: themeColors.cardBg,
+                                borderRadius: "20px",
+                                padding: "24px",
+                                boxShadow: isDarkMode
+                                    ? "0 4px 6px rgba(0, 0, 0, 0.1)"
+                                    : "0 2px 8px rgba(0, 0, 0, 0.06)",
+                                border: `1px solid ${themeColors.borderLight}`,
                             }}>
-                                📅 Attendance Records ({attendanceData.length} total)
-                            </h3>
-                        </div>
+                                <h4 style={{
+                                    marginBottom: "20px",
+                                    fontWeight: "700",
+                                    color: themeColors.textPrimary,
+                                    fontSize: "16px"
+                                }}>
+                                    Status Legend
+                                </h4>
+                                <div style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "8px"
+                                }}>
+                                    {Object.entries(statusConfig).map(([key, { bg, color, text, icon }]) => (
+                                        <div key={key} style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "12px",
+                                            padding: "12px 16px",
+                                            background: bg,
+                                            color: color,
+                                            borderRadius: "12px",
+                                            fontWeight: "600",
+                                            fontSize: "14px",
+                                            userSelect: "none",
+                                            transition: "transform 0.2s ease"
+                                        }}
+                                            onMouseOver={(e) => e.currentTarget.style.transform = "translateX(4px)"}
+                                            onMouseOut={(e) => e.currentTarget.style.transform = "translateX(0)"}
+                                        >
+                                            <span style={{ fontSize: "18px", width: "24px" }}>{icon}</span>
+                                            <span>{text}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
 
-                        <div style={{ overflowX: "auto" }}>
-                            <table style={{
-                                width: "100%",
-                                borderCollapse: "collapse",
-                                fontSize: "14px",
-                            }}>
-                                <thead>
-                                    <tr style={{
-                                        background: isDarkMode
-                                            ? "linear-gradient(90deg, #2d3748 0%, #1a202c 100%)"
-                                            : "linear-gradient(90deg, #f7fafc 0%, #edf2f7 100%)",
-                                        color: themeColors.textPrimary,
+                            {/* Selected Day Details */}
+                            {selectedDay ? (
+                                <div style={{
+                                    background: themeColors.cardBg,
+                                    borderRadius: "20px",
+                                    padding: "24px",
+                                    boxShadow: isDarkMode
+                                        ? "0 8px 25px rgba(0, 0, 0, 0.2)"
+                                        : "0 8px 25px rgba(0, 0, 0, 0.1)",
+                                    border: `2px solid ${themeColors.accent}`,
+                                    position: 'sticky',
+                                    top: "100px"
+                                }}>
+                                    <div style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "flex-start",
+                                        marginBottom: "20px"
                                     }}>
-                                        {[
-                                            { label: "Date", icon: "📅" },
-                                            { label: "Status", icon: "📊" },
-                                            { label: "Check In", icon: "🕐" },
-                                            { label: "Check Out", icon: "🕑" },
-                                            { label: "Work Hours", icon: "⏱️" },
-                                            { label: "Late By", icon: "⏰" },
-                                            { label: "Location", icon: "📍" }
-                                        ].map((header, idx) => (
-                                            <th key={idx} style={{
-                                                padding: "16px",
-                                                textAlign: "left",
-                                                fontWeight: "600",
-                                                fontSize: "12px",
-                                                textTransform: "uppercase",
-                                                letterSpacing: "0.05em",
-                                            }}>
-                                                <span style={{ marginRight: "6px" }}>{header.icon}</span>
-                                                {header.label}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {attendanceData.length > 0 ? attendanceData.map((record, idx) => {
-                                        const statusConfig = {
-                                            present: {
-                                                bg: isDarkMode ? "#064e3b" : "#dcfce7",
-                                                color: isDarkMode ? "#10b981" : "#059669",
-                                                text: "Present",
-                                                icon: "✅",
-                                            },
-                                            absent: {
-                                                bg: isDarkMode ? "#7f1d1d" : "#fecaca",
-                                                color: isDarkMode ? "#ef4444" : "#dc2626",
-                                                text: "Absent",
-                                                icon: "❌",
-                                            },
-                                            "on-leave": {
-                                                bg: isDarkMode ? "#92400e" : "#fed7aa",
-                                                color: isDarkMode ? "#f59e0b" : "#d97706",
-                                                text: "On Leave",
-                                                icon: "🏖️",
-                                            },
-                                        };
+                                        <h3 style={{
+                                            margin: 0,
+                                            color: themeColors.textPrimary,
+                                            fontSize: "18px",
+                                            fontWeight: "700"
+                                        }}>
+                                            📋 Day Details
+                                        </h3>
+                                        <button
+                                            onClick={closeSelectedDay}
+                                            style={{
+                                                background: "none",
+                                                border: "none",
+                                                fontSize: "20px",
+                                                cursor: "pointer",
+                                                color: themeColors.textSecondary,
+                                                padding: "4px",
+                                                borderRadius: "6px",
+                                                transition: "all 0.2s ease"
+                                            }}
+                                            onMouseOver={(e) => {
+                                                e.target.style.background = themeColors.borderLight;
+                                                e.target.style.color = themeColors.textPrimary;
+                                            }}
+                                            onMouseOut={(e) => {
+                                                e.target.style.background = "none";
+                                                e.target.style.color = themeColors.textSecondary;
+                                            }}
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
 
-                                        const sc = statusConfig[record.status] || statusConfig.absent;
-                                        const isEvenRow = idx % 2 === 0;
-                                        const rowBg = isEvenRow ? themeColors.cardBg : themeColors.cardBgSecondary;
+                                    <div style={{
+                                        marginBottom: "20px",
+                                        padding: "16px",
+                                        background: themeColors.cardBgSecondary,
+                                        borderRadius: "12px",
+                                        textAlign: "center"
+                                    }}>
+                                        <div style={{
+                                            fontSize: "15px",
+                                            fontWeight: "600",
+                                            color: themeColors.textSecondary,
+                                            marginBottom: "4px"
+                                        }}>
+                                            {format(new Date(selectedDay.date), 'EEEE')}
+                                        </div>
+                                        <div style={{
+                                            fontSize: "18px",
+                                            fontWeight: "700",
+                                            color: themeColors.textPrimary
+                                        }}>
+                                            {format(new Date(selectedDay.date), 'MMM dd, yyyy')}
+                                        </div>
+                                    </div>
 
-                                        return (
-                                            <tr key={record.id || idx} style={{
-                                                backgroundColor: rowBg,
-                                                borderBottom: `1px solid ${themeColors.borderLight}`,
+                                    {selectedDay.noRecord ? (
+                                        <div style={{
+                                            textAlign: 'center',
+                                            color: themeColors.textSecondary,
+                                            padding: '40px 20px'
+                                        }}>
+                                            <div style={{
+                                                fontSize: '64px',
+                                                marginBottom: '16px',
+                                                opacity: 0.5
                                             }}>
-                                                <td style={{
-                                                    padding: "16px",
-                                                    color: themeColors.textPrimary,
-                                                    fontWeight: "500",
-                                                }}>
-                                                    {formatDate(record.date)}
-                                                </td>
-                                                <td style={{ padding: "16px" }}>
-                                                    <span style={{
-                                                        display: "inline-flex",
-                                                        alignItems: "center",
-                                                        gap: "6px",
-                                                        padding: "4px 10px",
-                                                        borderRadius: "16px",
-                                                        fontSize: "11px",
-                                                        fontWeight: "600",
-                                                        backgroundColor: sc.bg,
-                                                        color: sc.color,
+                                                🚫
+                                            </div>
+                                            <p style={{
+                                                margin: 0,
+                                                fontSize: "15px",
+                                                fontWeight: "500"
+                                            }}>
+                                                No attendance record for this day
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '16px'
+                                        }}>
+                                            <div style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '10px',
+                                                padding: '12px 20px',
+                                                background: statusConfig[selectedDay.status]?.bg || statusConfig.absent.bg,
+                                                color: statusConfig[selectedDay.status]?.color || statusConfig.absent.color,
+                                                borderRadius: '12px',
+                                                fontWeight: '700',
+                                                fontSize: '15px',
+                                                alignSelf: 'flex-start'
+                                            }}>
+                                                {statusConfig[selectedDay.status]?.icon}
+                                                {statusConfig[selectedDay.status]?.text || selectedDay.status}
+                                            </div>
+
+                                            <div style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: '1fr 1fr',
+                                                gap: '16px'
+                                            }}>
+                                                <DetailCard
+                                                    label="Check In"
+                                                    value={formatTime(selectedDay.checkIn?.time)}
+                                                    themeColors={themeColors}
+                                                />
+                                                <DetailCard
+                                                    label="Check Out"
+                                                    value={formatTime(selectedDay.checkOut?.time)}
+                                                    themeColors={themeColors}
+                                                />
+                                                <DetailCard
+                                                    label="Work Hours"
+                                                    value={formatWorkHours(selectedDay.workHours)}
+                                                    themeColors={themeColors}
+                                                    highlight
+                                                />
+                                                <DetailCard
+                                                    label="Late By"
+                                                    value={selectedDay.isLate ? `⚠️ ${selectedDay.lateBy ? `${selectedDay.lateBy}m` : 'Yes'}` : '✅ On Time'}
+                                                    themeColors={themeColors}
+                                                    warning={selectedDay.isLate}
+                                                />
+                                                {selectedDay.isShortAttendance && (
+                                                    <DetailCard
+                                                        label="Short Attendance"
+                                                        value={`⚠️ Short by ${selectedDay.shortByMinutes} min`}
+                                                        themeColors={themeColors}
+                                                        warning
+                                                    />
+                                                )}
+                                            </div>
+
+                                            {selectedDay.checkIn?.location?.address && (
+                                                <div>
+                                                    <div style={{
+                                                        fontSize: '13px',
+                                                        color: themeColors.textSecondary,
+                                                        marginBottom: '8px',
+                                                        fontWeight: '600'
                                                     }}>
-                                                        {sc.icon} {sc.text}
-                                                    </span>
-                                                </td>
-                                                <td style={{
-                                                    padding: "16px",
-                                                    fontFamily: "monospace",
-                                                    color: themeColors.textPrimary,
-                                                }}>
-                                                    {formatTime(record.checkIn?.time)}
-                                                </td>
-                                                <td style={{
-                                                    padding: "16px",
-                                                    fontFamily: "monospace",
-                                                    color: themeColors.textPrimary,
-                                                }}>
-                                                    {formatTime(record.checkOut?.time)}
-                                                </td>
-                                                <td style={{
-                                                    padding: "16px",
-                                                    fontFamily: "monospace",
-                                                    color: themeColors.textPrimary,
-                                                }}>
-                                                    {formatWorkHours(record.workHours)}
-                                                </td>
-                                                <td style={{ padding: "16px" }}>
-                                                    {record.isLate ? (
-                                                        <span style={{
-                                                            color: themeColors.error,
-                                                            fontWeight: "600",
-                                                        }}>
-                                                            ⚠️ {record.lateBy ? `${record.lateBy}m` : "Yes"}
-                                                        </span>
-                                                    ) : (
-                                                        <span style={{
-                                                            color: themeColors.success,
-                                                            fontWeight: "500",
-                                                        }}>
-                                                            ✅ No
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td style={{ padding: "16px", fontSize: "12px" }}>
+                                                        Location
+                                                    </div>
                                                     <LocationCell
-                                                        address={record.checkIn?.location?.address}
+                                                        address={selectedDay.checkIn.location.address}
                                                         isDarkMode={isDarkMode}
                                                     />
-                                                </td>
-                                            </tr>
-                                        );
-                                    }) : (
-                                        <tr>
-                                            <td colSpan={7} style={{
-                                                padding: "40px",
-                                                textAlign: "center",
-                                                color: themeColors.textSecondary,
-                                            }}>
-                                                No attendance records found
-                                            </td>
-                                        </tr>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
-                                </tbody>
-                            </table>
+                                </div>
+                            ) : (
+                                <div style={{
+                                    background: themeColors.cardBg,
+                                    borderRadius: "20px",
+                                    padding: "40px 24px",
+                                    textAlign: 'center',
+                                    color: themeColors.textSecondary,
+                                    boxShadow: isDarkMode
+                                        ? "0 4px 6px rgba(0, 0, 0, 0.1)"
+                                        : "0 2px 8px rgba(0, 0, 0, 0.06)",
+                                    border: `1px solid ${themeColors.borderLight}`,
+                                    fontStyle: 'italic'
+                                }}>
+                                    <div style={{ fontSize: "48px", marginBottom: "16px", opacity: 0.5 }}>👆</div>
+                                    <p style={{ margin: 0, fontSize: "15px" }}>
+                                        Click on any day to view detailed attendance information
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </main>
@@ -613,5 +1165,33 @@ const EmployeeAttendanceDetail = () => {
         </div>
     );
 };
+
+// Helper component for detail cards
+const DetailCard = ({ label, value, themeColors, highlight = false, warning = false }) => (
+    <div style={{
+        background: themeColors.cardBgSecondary,
+        borderRadius: "10px",
+        padding: "12px",
+        border: `1px solid ${themeColors.borderLight}`
+    }}>
+        <div style={{
+            fontSize: '12px',
+            color: themeColors.textSecondary,
+            marginBottom: '6px',
+            fontWeight: '600'
+        }}>
+            {label}
+        </div>
+        <div style={{
+            fontSize: '16px',
+            fontWeight: '700',
+            color: warning ? themeColors.warning :
+                highlight ? themeColors.primary : themeColors.textPrimary,
+            fontFamily: 'monospace'
+        }}>
+            {value}
+        </div>
+    </div>
+);
 
 export default EmployeeAttendanceDetail;

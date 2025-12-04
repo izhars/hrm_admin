@@ -7,18 +7,46 @@ class AttendanceApi extends ApiBase {
     super(`${BASE_URL}/attendance`);
   }
 
+  // Check-in method
+  async checkIn(locationData) {
+    return this.fetchWithErrorHandling(`${this.endpoint}/check-in`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.getAuthToken()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(locationData),
+    });
+  }
+
+  // Check-out method
+  async checkOut(locationData) {
+    return this.fetchWithErrorHandling(`${this.endpoint}/check-out`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.getAuthToken()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(locationData),
+    });
+  }
+
+  // Get today's attendance for current user
+  async getMyTodayAttendance() {
+    return this.fetchWithErrorHandling(`${this.endpoint}/today`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${this.getAuthToken()}`,
+      },
+    });
+  }
+
   // ✅ Get attendance records (optionally by employeeId or filters)
   async getAttendanceRecords(employeeId, params = {}) {
     try {
-      console.log("🟢 [getAttendanceRecords] Called with:");
-      console.log("   Employee ID:", employeeId);
-      console.log("   Params:", params);
-
       const query = new URLSearchParams(params).toString();
       const url = employeeId ? `${this.endpoint}/${employeeId}` : this.endpoint;
       const fullUrl = query ? `${url}?${query}` : url;
-
-      console.log("   Final Request URL:", fullUrl);
 
       const response = await this.fetchWithErrorHandling(fullUrl, {
         method: "GET",
@@ -27,8 +55,6 @@ class AttendanceApi extends ApiBase {
           "Content-Type": "application/json",
         },
       });
-
-      console.log("✅ [getAttendanceRecords] Response received:", response);
       return response;
 
     } catch (error) {
@@ -111,6 +137,47 @@ class AttendanceApi extends ApiBase {
         message: error.message || "Failed to fetch attendance summary",
       };
     }
+  }
+
+  // In AttendanceApi.js
+  async exportMonthlyAttendance({ month, year, format = 'xlsx', department }) {
+    const queryParams = new URLSearchParams({ month, year, format });
+    if (department) queryParams.append('department', department);
+
+    const url = `${this.endpoint}/export-monthly?${queryParams.toString()}`;
+    const token = this.getAuthToken();
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to export attendance');
+    }
+
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let fileName = 'Attendance_Report.' + format;
+
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="(.+)"/);
+      if (match) {
+        fileName = match[1];
+      }
+    }
+
+    // Trigger file download in browser
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    return { success: true };
   }
 }
 

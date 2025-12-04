@@ -22,15 +22,11 @@ const ComboOffReviewScreen = () => {
     // Fetch combo off requests
     const fetchComboOffs = async () => {
         try {
-            console.log("Fetching combo offs with statusFilter:", statusFilter);
             setLoading(true);
-
             const res = await ComboApi.getAllComboOffs(statusFilter);
-            console.log("Response from ComboApi.getAllComboOffs:", res);
 
             if (res.success) {
                 setComboOffs(res.data.comboOffs || res.data);
-                console.log("Combo offs set:", res.data.comboOffs || res.data);
             }
             setError("");
         } catch (err) {
@@ -38,7 +34,6 @@ const ComboOffReviewScreen = () => {
             setError(err.message);
         } finally {
             setLoading(false);
-            console.log("fetchComboOffs finished, loading set to false");
         }
     };
 

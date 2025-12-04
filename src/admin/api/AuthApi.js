@@ -47,10 +47,32 @@ class AuthApi extends ApiBase {
       return { success: false, message };
     }
   }
+  
+
+  async forgotPassword(email) {
+    try {
+      const url = `${this.endpoint}/forgot-password`;
+
+      const result = await this.fetchWithErrorHandling(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      return result.success
+        ? { success: true, message: result.data?.message || "Reset link sent" }
+        : { success: false, message: result.data?.message || "Failed to send reset link" };
+
+    } catch (error) {
+      return { success: false, message: error.message || "Something went wrong" };
+    }
+  }
+
 
   async getManagers() {
     try {
-      console.log("[getManagers] ➤ Fetching managers...");
 
       const url = `${this.endpoint}/manager`;
       const result = await this.fetchWithErrorHandling(url, {
@@ -61,17 +83,15 @@ class AuthApi extends ApiBase {
         },
       });
 
-      console.log("[getManagers] result:", result);
-
       if (result.success) {
-        console.log("[getManagers] ✅ Managers fetched successfully");
+      
         return { success: true, data: result.data?.data || result.data };
       } else {
-        console.warn("[getManagers] ⚠️ Failed to fetch managers:", result.data?.message);
+       
         return { success: false, message: result.data?.message };
       }
     } catch (error) {
-      console.error("[getManagers] ❌ Error:", error);
+      
       return { success: false, message: error.message || "Failed to fetch managers" };
     }
   }
@@ -82,10 +102,7 @@ class AuthApi extends ApiBase {
     const payload = { isVerified };
 
     try {
-      console.log("Toggling verification:");
-      console.log("URL:", url);
-      console.log("Payload:", payload);
-
+     
       const result = await this.fetchWithErrorHandling(url, {
         method: "PUT",
         headers: {
@@ -94,7 +111,6 @@ class AuthApi extends ApiBase {
         body: JSON.stringify(payload)
       });
 
-      console.log("Server response:", result);
       return result;
     } catch (error) {
       console.error("Error toggling verification:", error);

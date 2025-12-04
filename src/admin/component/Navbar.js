@@ -17,9 +17,6 @@ const Navbar = ({ onMenuClick, isCollapsed, admin: propAdmin }) => {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
 
-  // Debug log to check theme state
-  console.log('Navbar - Current dark mode:', isDarkMode);
-
   if (!actualAdmin) return null;
 
   const handleProfileMenuOpen = (event) => setAnchorEl(event.currentTarget);
@@ -31,7 +28,6 @@ const Navbar = ({ onMenuClick, isCollapsed, admin: propAdmin }) => {
   };
 
   const handleThemeToggle = () => {
-    console.log('Theme toggle clicked, current state:', isDarkMode);
     toggleTheme();
   };
 

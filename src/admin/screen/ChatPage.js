@@ -67,7 +67,6 @@ const ChatPage = () => {
 
             if (employeeData?.lastSeen) {
                 setLastSeen(employeeData.lastSeen);
-                console.log('📅 Fetched last seen:', employeeData.lastSeen);
             } else {
                 console.error('Failed to fetch last seen:', result);
                 setLastSeen(null);
@@ -122,7 +121,6 @@ const ChatPage = () => {
         });
 
         newSocket.on("user-online", (user) => {
-            console.log('🟢 User came online:', user);
             setActiveUsers((prev) => {
                 const filtered = prev.filter((u) => u.userId !== user.id);
                 return [...filtered, { ...user, userId: user.id.toString() }];
@@ -137,7 +135,6 @@ const ChatPage = () => {
 
         // ✅ UPDATED: Handle user offline status with last seen fetch
         newSocket.on("user-offline", (user) => {
-            console.log('🔴 User went offline:', user);
             setActiveUsers((prev) => prev.filter((u) => u.userId !== user.id.toString()));
 
             // Update current employee status if this is the user we're chatting with
@@ -194,9 +191,6 @@ const ChatPage = () => {
 
     /* ---------- DEBUG STATE CHANGES ---------- */
     useEffect(() => {
-        console.log('🟡 Active Users:', activeUsers);
-        console.log('🟡 Employee Info:', employeeInfo);
-        console.log('🟡 Is Employee Online:', isEmployeeOnline);
     }, [activeUsers, employeeInfo]);
 
     const sendMessage = () => {
@@ -705,8 +699,6 @@ const ChatPage = () => {
 function formatLastSeen(dateString) {
     if (!dateString) return "Unknown";
 
-    console.log("📅 Raw lastSeen:", dateString);
-
     try {
         const date = new Date(dateString);
         const now = new Date();
@@ -768,8 +760,6 @@ function formatLastSeen(dateString) {
                 minute: "2-digit",
             });
         }
-
-        console.log("✅ Formatted lastSeen:", formatted);
         return formatted;
     } catch (error) {
         console.error("Error formatting last seen:", error);

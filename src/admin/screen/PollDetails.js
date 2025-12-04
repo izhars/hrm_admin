@@ -28,9 +28,7 @@ const PollDetails = () => {
         setError('');
 
         try {
-            console.log("🟡 Fetching poll data for ID:", pollId);
             const res = await PollApi.getById(pollId);
-            console.log("🟢 Full response:", res);
 
             const pollData = res.data?.poll || res.polls?.[0];
 
@@ -79,10 +77,6 @@ const PollDetails = () => {
         setCloseError('');
 
         try {
-            console.log("🟡 Closing poll with ID:", pollId);
-            const res = await PollApi.close(pollId);
-            console.log("🟢 Poll closed successfully:", res);
-
             // Refresh the poll data to show updated status
             await fetchPoll();
 

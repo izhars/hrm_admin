@@ -25,7 +25,7 @@ export const AdminProvider = ({ children }) => {
     setError("");
     
     try {
-      const data = await AuthApi.login({ email, password }); // ✅ use instance method
+      const data = await AuthApi.login({ email, password });
 
       if (!data.success) {
         setError(data.message || "Login failed");
@@ -52,6 +52,20 @@ export const AdminProvider = ({ children }) => {
     }
   };
 
+  // Add forgotPassword function
+  const handleForgotPassword = async (email) => {
+    try {
+      const data = await AuthApi.forgotPassword(email);
+      return data; // This returns { success: boolean, message: string }
+    } catch (err) {
+      console.error("Forgot password error:", err);
+      return { 
+        success: false, 
+        message: err.message || "Failed to send reset email" 
+      };
+    }
+  };
+
   const handleLogout = () => {
     setAdmin(null);
     setError("");
@@ -62,7 +76,14 @@ export const AdminProvider = ({ children }) => {
 
   return (
     <AdminContext.Provider
-      value={{ admin, error, loading, login: handleLogin, logout: handleLogout }}
+      value={{ 
+        admin, 
+        error, 
+        loading, 
+        login: handleLogin, 
+        logout: handleLogout,
+        forgotPassword: handleForgotPassword // Add this
+      }}
     >
       {loading ? <div>Loading...</div> : children}
     </AdminContext.Provider>

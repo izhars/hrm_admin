@@ -24,8 +24,6 @@ export const ThemeProvider = ({ children }) => {
   });
 
   useEffect(() => {
-    console.log('Current dark mode state:', isDarkMode); // Debug log
-    
     // Save theme preference to localStorage
     try {
       localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
@@ -46,12 +44,10 @@ export const ThemeProvider = ({ children }) => {
   }, [isDarkMode]);
 
   const toggleTheme = () => {
-    console.log('Toggling theme, current state:', isDarkMode); // Debug log
     setIsDarkMode(prev => !prev);
   };
 
   const setTheme = (dark) => {
-    console.log('Setting theme to:', dark); // Debug log
     setIsDarkMode(dark);
   };
 

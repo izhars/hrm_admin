@@ -12,8 +12,7 @@ const NotificationCount = ({ navbarTheme, isDarkMode }) => {
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        console.log('[NotificationCount] Fetching notifications...');
-
+       
         const res = await NotificationApi.getMyNotifications({
           page: 1,
           limit: 50,
@@ -29,7 +28,7 @@ const NotificationCount = ({ navbarTheme, isDarkMode }) => {
 
         const unreadCount = array.filter((n) => !n.read).length;
         setCount(unreadCount);
-        console.log(`[NotificationCount] Unread count: ${unreadCount}`);
+        
       } catch (err) {
         console.error('[NotificationCount] Fetch error:', err);
       }
@@ -44,7 +43,6 @@ const NotificationCount = ({ navbarTheme, isDarkMode }) => {
     <IconButton
       color="inherit"
       onClick={() => {
-        console.log('[NotificationCount] Navigating to /admin/notifications');
         navigate('/admin/notifications');
       }}
       size="small"

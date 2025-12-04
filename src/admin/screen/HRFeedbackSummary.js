@@ -84,7 +84,6 @@ const HRFeedbackDashboard = () => {
       alert("Failed to load dashboard data");
     } finally {
       setLoading(false);
-      console.log("⏹ Loading state set to false");
     }
   };
 

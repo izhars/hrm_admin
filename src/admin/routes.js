@@ -26,6 +26,9 @@ import NotificationsPage from './screen/NotificationsPage';
 import ComboOffReviewScreen from './screen/ComboOffReviewScreen';
 import FaqPage from './screen/FaqPage';
 import HelpPage from './screen/HelpPage';
+import ForgotPassword from "./screen/ForgotPassword";
+import Celebration from './screen/Celebration'; // import your celebration screen
+import AboutScreen from './screen/AboutScreen'; // import your celebration screen
 
 const AdminRoutes = () => {
   return (
@@ -35,6 +38,7 @@ const AdminRoutes = () => {
           <Routes>
             {/* Public Route */}
             <Route path="/" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
 
             {/* Protected Routes - Dashboard accessible to all authenticated users */}
             <Route
@@ -65,7 +69,14 @@ const AdminRoutes = () => {
                 </ProtectedRoute>
               }
             />
-
+            <Route
+              path="/admin/celebrations"
+              element={
+                <ProtectedRoute allowedRoles={['superadmin', 'admin', 'hr']}>
+                  <Celebration />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/admin/notifications"
               element={
@@ -185,6 +196,14 @@ const AdminRoutes = () => {
               }
             />
             <Route
+              path="/employee-attendance/:employeeId"
+              element={
+                <ProtectedRoute allowedRoles={['superadmin', 'admin', 'hr']}>
+                  <EmployeeAttendanceDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/announcements"
               element={
                 <ProtectedRoute allowedRoles={['superadmin', 'admin', 'hr']}>
@@ -197,14 +216,6 @@ const AdminRoutes = () => {
               element={
                 <ProtectedRoute allowedRoles={['superadmin', 'admin', 'hr']}>
                   <AwardScreen />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/employee-attendance/:employeeId"
-              element={
-                <ProtectedRoute allowedRoles={['superadmin', 'admin', 'hr']}>
-                  <EmployeeAttendanceDetail />
                 </ProtectedRoute>
               }
             />
@@ -233,6 +244,14 @@ const AdminRoutes = () => {
                     <h2>404 - Page Not Found</h2>
                     <p>The page you're looking for doesn't exist.</p>
                   </div>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/about"
+              element={
+                <ProtectedRoute allowedRoles={['hr', 'admin']}>
+                  <AboutScreen /> {/* Make sure you have an AboutPage component */}
                 </ProtectedRoute>
               }
             />

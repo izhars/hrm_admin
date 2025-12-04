@@ -2,12 +2,16 @@ import React, { useContext, useState, useMemo, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AdminContext } from '../context/AdminContext';
 
-const Sidebar = ({ isCollapsed: externalCollapsed, onToggle, isDarkMode }) => {
+const Sidebar = ({ isCollapsed: externalCollapsed, onToggle, isDarkMode, mobileOpen = false, onMobileClose = () => { } }) => {
   const { admin } = useContext(AdminContext);
   const location = useLocation();
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const scrollContainerRef = useRef(null);
+
+  // Add a ref to prevent initial scroll restoration on first load
+  const hasInitialized = useRef(false);
+  const shouldSaveScroll = useRef(true);
 
   // Use external state if provided, otherwise internal
   const isCollapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed;
@@ -49,6 +53,13 @@ const Sidebar = ({ isCollapsed: externalCollapsed, onToggle, isDarkMode }) => {
       icon: '🏢',
       description: 'Organize company departments',
       roles: ['superadmin', 'hr'],
+    },
+    {
+      path: '/admin/celebrations',
+      label: 'Celebrations',
+      icon: '🎉',
+      description: 'View and manage all company celebrations and special events',
+      roles: ['hr', 'admin'],
     },
     {
       path: '/admin/analytics',
@@ -137,6 +148,13 @@ const Sidebar = ({ isCollapsed: externalCollapsed, onToggle, isDarkMode }) => {
       icon: '📘',                      // Book icon for knowledge/help topics
       description: 'Manage employee help topics, FAQs, and guidance materials', // Detailed tooltip
       roles: ['hr', 'admin'],          // Only HR/Admin can access
+    },
+    {
+      path: '/admin/about',
+      label: 'About',
+      icon: '📝',  // Notebook icon for documentation/records
+      description: 'Manage company info, employee guides, and internal FAQs',
+      roles: ['hr', 'admin'],
     }
   ], []);
 
@@ -156,32 +174,65 @@ const Sidebar = ({ isCollapsed: externalCollapsed, onToggle, isDarkMode }) => {
     return items;
   }, [admin?.role, menuItems, searchTerm]);
 
-  // Scroll persistence
-  useEffect(() => {
-    const savedPosition = sessionStorage.getItem('admin-sidebar-scroll');
-    if (savedPosition && scrollContainerRef.current) {
-      requestAnimationFrame(() => {
-        scrollContainerRef.current.scrollTop = parseInt(savedPosition, 10);
-      });
-    }
-  }, [location.pathname]);
-
+  // Save scroll position when component unmounts or path changes
   useEffect(() => {
     return () => {
-      if (scrollContainerRef.current) {
+      if (scrollContainerRef.current && shouldSaveScroll.current) {
         sessionStorage.setItem('admin-sidebar-scroll', scrollContainerRef.current.scrollTop.toString());
       }
     };
   }, [location.pathname]);
 
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
+  // Restore scroll position when path changes
+  useEffect(() => {
+    const savedPosition = sessionStorage.getItem('admin-sidebar-scroll');
 
+    // Prevent scroll restoration on initial load
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      return;
+    }
+
+    if (savedPosition && scrollContainerRef.current) {
+      // Use setTimeout to ensure DOM is ready
+      setTimeout(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = parseInt(savedPosition, 10);
+        }
+      }, 10);
+    }
+  }, [location.pathname]);
+
+  // Handle scroll events
   const handleScroll = () => {
     if (scrollContainerRef.current) {
       sessionStorage.setItem('admin-sidebar-scroll', scrollContainerRef.current.scrollTop.toString());
     }
+  };
+
+  // Handle navigation clicks - save scroll position before navigation
+  const handleNavClick = () => {
+    shouldSaveScroll.current = true;
+    if (scrollContainerRef.current) {
+      sessionStorage.setItem('admin-sidebar-scroll', scrollContainerRef.current.scrollTop.toString());
+    }
+  };
+
+  // Reset scroll when searching
+  useEffect(() => {
+    if (searchTerm) {
+      shouldSaveScroll.current = false;
+      // Optionally scroll to top when searching
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = 0;
+      }
+    } else {
+      shouldSaveScroll.current = true;
+    }
+  }, [searchTerm]);
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
   };
 
   const sidebarStyles = {
@@ -406,9 +457,28 @@ const Sidebar = ({ isCollapsed: externalCollapsed, onToggle, isDarkMode }) => {
     }
   };
 
+  // Responsive: detect mobile viewport to render overlay-style sidebar
+  const [isMobileView, setIsMobileView] = useState(typeof window !== 'undefined' ? window.innerWidth <= 960 : false);
+  useEffect(() => {
+    const onResize = () => setIsMobileView(window.innerWidth <= 960);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Compute dynamic styles for mobile overlay
+  const computedSidebarStyle = { ...sidebarStyles.sidebar };
+  if (isMobileView) {
+    const mobileWidth = Math.min(280, Math.round(window.innerWidth * 0.8));
+    computedSidebarStyle.width = `${mobileWidth}px`;
+    computedSidebarStyle.transform = mobileOpen ? 'translateX(0)' : 'translateX(-110%)';
+    computedSidebarStyle.transition = 'transform 0.25s ease-in-out';
+    computedSidebarStyle.boxShadow = '0 8px 40px rgba(2,6,23,0.4)';
+    computedSidebarStyle.zIndex = 1400;
+  }
+
   if (!admin) {
     return (
-      <aside style={sidebarStyles.sidebar}>
+      <aside style={computedSidebarStyle}>
         <div style={sidebarStyles.header}>
           <div style={{ color: '#64748b', fontSize: '14px' }}>Loading...</div>
         </div>
@@ -419,6 +489,7 @@ const Sidebar = ({ isCollapsed: externalCollapsed, onToggle, isDarkMode }) => {
   const handleLogout = (e) => {
     e.preventDefault();
     localStorage.removeItem('adminToken');
+    sessionStorage.removeItem('admin-sidebar-scroll');
     window.location.href = '/';
   };
 
@@ -450,9 +521,27 @@ const Sidebar = ({ isCollapsed: externalCollapsed, onToggle, isDarkMode }) => {
           background-color: ${isDarkMode ? 'rgba(248, 113, 113, 0.2)' : 'rgba(220, 38, 38, 0.1)'} !important;
           transform: translateY(-1px);
         }
+        .sidebar-scrollable {
+          scroll-behavior: auto !important;
+        }
       `}</style>
 
-      <aside className="sidebar" style={sidebarStyles.sidebar} ref={scrollContainerRef} onScroll={handleScroll}>
+      {isMobileView && mobileOpen && (
+        <div
+          onClick={onMobileClose}
+          style={{
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.4)',
+            zIndex: 1300
+          }}
+        />
+      )}
+
+      <aside className="sidebar" style={computedSidebarStyle}>
         {/* Header */}
         <div style={sidebarStyles.header}>
           <div style={sidebarStyles.logoContainer}>
@@ -490,7 +579,12 @@ const Sidebar = ({ isCollapsed: externalCollapsed, onToggle, isDarkMode }) => {
         </div>
 
         {/* Navigation */}
-        <nav style={sidebarStyles.nav} className="sidebar-scrollable">
+        <nav
+          style={sidebarStyles.nav}
+          className="sidebar-scrollable"
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+        >
           {filteredMenuItems.map((item) => {
             const active = isActive(item.path);
             return (
@@ -502,6 +596,7 @@ const Sidebar = ({ isCollapsed: externalCollapsed, onToggle, isDarkMode }) => {
                     ...(active ? sidebarStyles.activeLink : {})
                   }}
                   className="sidebar-nav-item"
+                  onClick={handleNavClick}
                 >
                   {active && <div style={sidebarStyles.activeIndicator} />}
                   <span style={sidebarStyles.icon}>{item.icon}</span>

@@ -22,8 +22,12 @@ class ApiBase {
 
   async fetchWithErrorHandling(url, options = {}) {
     try {
-      // 🔹 Skip token for login or register routes
-      const isAuthFreeRoute = url.includes("/login") || url.includes("/register");
+      // 🔹 Skip token for login, register, forgot-password, reset-password
+      const isAuthFreeRoute =
+        url.includes("/login") ||
+        url.includes("/register") ||
+        url.includes("/forgot-password") ||
+        url.includes("/reset-password");
 
       let headers = { ...this.defaultHeaders };
       let token = null;
@@ -32,7 +36,6 @@ class ApiBase {
         try {
           token = this.getAuthToken();
         } catch (err) {
-          // Don't throw error here, just rethrow after detecting actual API calls that need auth
           throw err;
         }
       }
@@ -61,7 +64,8 @@ class ApiBase {
           throw new Error("Session expired. Please log in again.");
         }
         if (response.status === 403) throw new Error(errorData.message || "Access denied.");
-        if (response.status === 400 && errorData.errors) throw new Error(JSON.stringify(errorData.errors));
+        if (response.status === 400 && errorData.errors)
+          throw new Error(JSON.stringify(errorData.errors));
 
         throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
       }
@@ -72,6 +76,7 @@ class ApiBase {
 
       const data = await response.json();
       return { success: true, data };
+
     } catch (error) {
       if (error.name === "TypeError" && error.message.includes("fetch"))
         throw new Error("Network error. Check connection.");
@@ -79,7 +84,6 @@ class ApiBase {
       throw error;
     }
   }
-
 
   isAuthenticated() {
     const token = localStorage.getItem("token");
